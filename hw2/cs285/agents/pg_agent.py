@@ -27,17 +27,19 @@ class PGAgent(nn.Module):
     ):
         super().__init__()
 
-        # create the actor (policy) network
-        self.actor = MLPPolicyPG(ac_dim, ob_dim, discrete, n_layers, layer_size, learning_rate)
+        # create the actor (policy) network     创建一个策略网络或演员网络
+        self.actor = MLPPolicyPG(
+            ac_dim, ob_dim, discrete, n_layers, layer_size, learning_rate
+        )
 
-        # create the critic (baseline) network, if needed
+        # create the critic (baseline) network, if needed       创建一个评论家网络或基线网络，如果需要的话
         if use_baseline:
             self.critic = ValueCritic(ob_dim, n_layers, layer_size, baseline_learning_rate)
             self.baseline_gradient_steps = baseline_gradient_steps
         else:
             self.critic = None
 
-        # other agent parameters
+        # other agent parameters    其他代理参数
         self.gamma = gamma
         self.use_reward_to_go = use_reward_to_go
         self.gae_lambda = gae_lambda
@@ -50,57 +52,69 @@ class PGAgent(nn.Module):
         rewards: Sequence[np.ndarray],
         terminals: Sequence[np.ndarray],
     ) -> dict:
-        """The train step for PG involves updating its actor using the given observations/actions and the calculated
+        """
+        The train step for PG involves updating its actor using the given observations/actions and the calculated
         qvals/advantages that come from the seen rewards.
+        策略梯度的训练步骤涉及使用给定的观察/动作和来自已见奖励的计算的qvals/优势来更新其演员。
 
         Each input is a list of NumPy arrays, where each array corresponds to a single trajectory. The batch size is the
         total number of samples across all trajectories (i.e. the sum of the lengths of all the arrays).
+        每个输入都是一个NumPy数组列表，其中每个数组对应于单个轨迹。批量大小是所有轨迹中样本的总数（即所有数组的长度之和）。
         """
 
         # step 1: calculate Q values of each (s_t, a_t) point, using rewards (r_0, ..., r_t, ..., r_T)
+        # 第一步：使用奖励（r_0，...，r_t，...，r_T）计算每个（s_t，a_t）点的Q值
         q_values: Sequence[np.ndarray] = self._calculate_q_vals(rewards)
 
-        # TODO: flatten the lists of arrays into single arrays, so that the rest of the code can be written in a vectorized
-        # way. obs, actions, rewards, terminals, and q_values should all be arrays with a leading dimension of `batch_size`
-        # beyond this point.
+        # TODO: flatten the lists of arrays into single arrays, so that the rest of the code can be written in a vectorized way. 
+        # obs, actions, rewards, terminals, and q_values should all be arrays with a leading dimension of `batch_size` beyond this point.
+        # TODO：将数组列表化为单个数组，这样剩下的代码可以以向量化的形式来写出。观察、动作、奖励、终端和q_values应该都是具有“batch_size”前导维度的数组。
         obs = np.concatenate(obs)
         actions = np.concatenate(actions)
         rewards = np.concatenate(rewards)
         terminals = np.concatenate(terminals)
         q_values = np.concatenate(q_values)
-        assert obs.shape[0] == actions.shape[0] == rewards.shape[0] == terminals.shape[0] == q_values.shape[0]
+
 
         # step 2: calculate advantages from Q values
-        advantages: np.ndarray = self._estimate_advantage(obs, rewards, q_values, terminals)
+        # 第二步：从Q值计算优势
+        advantages: np.ndarray = self._estimate_advantage(
+            obs, rewards, q_values, terminals
+        )
 
         # step 3: use all datapoints (s_t, a_t, adv_t) to update the PG actor/policy
+        # 第三步：使用所有数据点（s_t，a_t，adv_t）来更新PG演员/策略
         # TODO: update the PG actor/policy network once using the advantages
-        info: dict = self.actor.update(obs, actions, advantages)
+        # TODO：使用advantage一次更新PG演员/策略网络
+        info: dict = None
 
         # step 4: if needed, use all datapoints (s_t, a_t, q_t) to update the PG critic/baseline
+        # 第四步：如果需要，使用所有数据点（s_t，a_t，q_t）来更新PG评论家/基线
         if self.critic is not None:
             # TODO: perform `self.baseline_gradient_steps` updates to the critic/baseline network
-            critic_info: dict = self.critic.update(obs, q_values)
+            # TODO：执行“self.baseline_gradient_steps”次更新到评论家/基线网络
+            critic_info: dict = None
 
             info.update(critic_info)
 
         return info
 
     def _calculate_q_vals(self, rewards: Sequence[np.ndarray]) -> Sequence[np.ndarray]:
-        """Monte Carlo estimation of the Q function."""
+        """Monte Carlo estimation of the Q function.    Q函数的蒙特卡洛估计。"""
 
         if not self.use_reward_to_go:
-            # Case 1: in trajectory-based PG, we ignore the timestep and instead use the discounted return for the entire
-            # trajectory at each point.
+            # Case 1: in trajectory-based PG, we ignore the timestep and instead use the discounted return for the entire trajectory at each point.
             # In other words: Q(s_t, a_t) = sum_{t'=0}^T gamma^t' r_{t'}
+            # 第一种情况：在基于轨迹的策略梯度中，我们忽略时间步长，而是在每个点上使用整个轨迹的折现回报。换句话说：Q（s_t，a_t）= sum_{t'=0}^T gamma^t' r_{t'}
             # TODO: use the helper function self._discounted_return to calculate the Q-values
-            q_values = [np.array(self._discounted_return(reward)) for reward in rewards]
+            # TODO：使用助手函数self._discounted_return来计算Q值
+            q_values = [self._discounted_return(reward) for reward in rewards]
 
         else:
             # Case 2: in reward-to-go PG, we only use the rewards after timestep t to estimate the Q-value for (s_t, a_t).
             # In other words: Q(s_t, a_t) = sum_{t'=t}^T gamma^(t'-t) * r_{t'}
             # TODO: use the helper function self._discounted_reward_to_go to calculate the Q-values
-            q_values = [np.array(self._discounted_reward_to_go(reward)) for reward in rewards]
+            q_values = [self._discounted_reward_to_go(reward) for reward in rewards]
 
         return q_values
 
@@ -157,13 +171,33 @@ class PGAgent(nn.Module):
 
         Note that all entries of the output list should be the exact same because each sum is from 0 to T (and doesn't
         involve t)!
+
+        辅助函数，输入rewards列表 {r_0, r_1, ..., r_t', ... r_T} ，返回一个列表，其中每个索引t包含sum_{t'=0}^T gamma^t' r_{t'}
+        请注意，输出列表的所有条目应完全相同，因为每个总和是从0到T（不涉及t）！
         """
-        value=sum([self.gamma**i * r for i, r in enumerate(rewards)])
+        value = 0
+        discounted_rate = 1
+        for i in range(len(rewards)):
+            value += discounted_rate* rewards[i]
+            discounted_rate *= self.gamma
         return [value for _ in rewards]
+    
+
 
     def _discounted_reward_to_go(self, rewards: Sequence[float]) -> Sequence[float]:
         """
         Helper function which takes a list of rewards {r_0, r_1, ..., r_t', ... r_T} and returns a list where the entry
         in each index t' is sum_{t'=t}^T gamma^(t'-t) * r_{t'}.
+
+        辅助函数，输入rewards列表 {r_0, r_1, ..., r_t', ... r_T} ，返回一个列表，其中每个索引t'的条目是sum_{t'=t}^T gamma^(t'-t) * r_{t'}。
         """
-        return [self._discounted_return(rewards[-i:])[0] for i in range((len(rewards)), 0, -1)]
+        T = len(rewards)
+        result = [0] * T
+        for i in range(T):
+            value = 0
+            discounted_rate = 1
+            for j in range(i, T):
+                value += discounted_rate * rewards[j]
+                discounted_rate *= self.gamma
+            result[i] = value
+        return result
