@@ -74,7 +74,7 @@ class PGAgent(nn.Module):
         rewards = np.concatenate(rewards)
         terminals = np.concatenate(terminals)
         q_values = np.concatenate(q_values)
-
+        assert obs.shape[0] == actions.shape[0] == rewards.shape[0] == terminals.shape[0] == q_values.shape[0]
 
         # step 2: calculate advantages from Q values
         # 第二步：从Q值计算优势
@@ -85,15 +85,14 @@ class PGAgent(nn.Module):
         # step 3: use all datapoints (s_t, a_t, adv_t) to update the PG actor/policy
         # 第三步：使用所有数据点（s_t，a_t，adv_t）来更新PG演员/策略
         # TODO: update the PG actor/policy network once using the advantages
-        # TODO：使用advantage一次更新PG演员/策略网络
-        info: dict = None
+        info: dict = self.actor.update(obs, actions, advantages)
 
         # step 4: if needed, use all datapoints (s_t, a_t, q_t) to update the PG critic/baseline
         # 第四步：如果需要，使用所有数据点（s_t，a_t，q_t）来更新PG评论家/基线
         if self.critic is not None:
             # TODO: perform `self.baseline_gradient_steps` updates to the critic/baseline network
             # TODO：执行“self.baseline_gradient_steps”次更新到评论家/基线网络
-            critic_info: dict = None
+            critic_info: dict = self.critic.update(obs, q_values)
 
             info.update(critic_info)
 
